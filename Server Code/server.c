@@ -3,6 +3,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/select.h>
+#include <ctype.h>
+#include <math.h>
 
 //For linux
 #include <arpa/inet.h>
@@ -17,55 +19,139 @@ char bufferA[SIZE];
 char bufferB[SIZE];
 char bufferSend[SIZE] = {0};
 
-int serverKey = 12;
+int serverKey = 79;
 int clientAKey = 0;
 int clientBKey = 0;
 
+int FastExponention(int bit, int n, int* y, int* a)
+{
+    if (bit == 1) {
+        *y = (*y * (*a)) % n;
+    }
+ 
+    *a = (*a) * (*a) % n;
+}
+
+
+int FindT(int a, int m, int n)
+{
+
+    int r;
+    int y = 1;
+ 
+    while (m > 0)
+    {
+        r = m % 2;
+        FastExponention(r, n, &y, &a);
+        m = m / 2;
+    }
+    return y;
+}
+
+int Encryption(int value, FILE* out)
+{
+    int e = 2997;
+    int n = 20131;
+    int cipher;
+    cipher = FindT(value, e, n);
+    fprintf(out, "%d ", cipher);
+}
+
+int Decryption(int value, FILE* out)
+{
+    int d = 10333;
+    int n = 20131;
+    int decipher;
+    decipher = FindT(value, d, n);
+    fprintf(out, "%c", decipher);
+}
+
+ 
 void Encode (int key1, int key2, char * buf, char * begin) {
-	int counter = 1;
+    // encryption starts
+    
+    FILE *inp;
+    FILE *out;
+    
+    out = fopen("interen.txt", "w+");
+    fprintf(out, "%s", buf);
+    fclose(out);
+    
+    
+    inp = fopen("interen.txt", "r+");
+    if (inp == NULL)
+    {
+        printf("Error opening Source File.\n");
+        exit(1);
+    }
+ 
+    out = fopen("cipher.txt", "w+");
+    if (out == NULL)
+    {
+        printf("Error opening Destination File.\n");
+        exit(1);
+    }
+    while (1)
+    {
+        char ch = getc(inp);
+        if (ch == -1) {
+            break;
+        }
+        int value = toascii(ch);
+        Encryption(value, out);
+    }
+    fclose(inp);
+    fclose(out);
 
-	while (*buf != '\0') {
-		int  new_ascii = *buf;
+    out = fopen("cipher.txt", "r");
+    fread(bufferSend, 1, 1000, out);
+    fclose(out);
 
-		for(int j=1; j<=(key1+key2); j++){
-			new_ascii += 1;
-			if (new_ascii > 127) {
-				new_ascii = 32;
-			}
-		}
-
-		char encrypted = new_ascii;
-		*buf = encrypted;
-		buf++;
-		counter++;
-	}
-
-	//fwrite(begin+1, 1 , counter-3*sizeof(char) , current);
 }
 
 
 void Decode (int key1, int key2, char * buf, char * begin) {
-	int counter = 1;
 
-	while (*buf != '\0') {
-		int  new_ascii = *buf;
+   FILE *inp;
+   FILE *out;
+    // decryption starts
+    out = fopen("interde.txt", "w+");
+    fprintf(out, "%s", buf);
+    fclose(out);
+  	
+    memset( buf, '\0', strlen(bufferA));
+    inp = fopen("interde.txt", "r");
+    if (inp == NULL)
+    {
+        printf("Error opening Cipher Text.\n");
+        exit(1);
+    }
 
-		for(int j=1; j<=(key1+key2); j++){
-			new_ascii -= 1;
-			if (new_ascii < 32) {
-				new_ascii = 127;
-			}
-		}
 
-		char decrypted = new_ascii;
-		*buf = decrypted;
-		buf++;
-		counter++;
-	}
+    out = fopen("decipher.txt", "w+");
+    if (out == NULL)
+    {
+        printf("Error opening File.\n");
+        exit(1);
+    }
 
-	//fwrite(begin+1, 1 , counter-3*sizeof(char) , current);
-}
-
+    while (1)
+    {
+        int cip;
+        if (fscanf(inp, "%d", &cip) == -1) {
+            break;
+        }
+        Decryption(cip, out);
+    }
+    fclose(out);
+    fclose(inp);
+ 
+    out = fopen("decipher.txt", "r");
+    fread(bufferA, 1, 1000, out);
+    fclose(out);
+    }
+    
+    
 //Takes a socket and reads incoming data into a file from it, data coming from client A
 void write_fileA(int sockfd) {
     int n;
@@ -134,8 +220,8 @@ void send_file(FILE *fp, int sockfd) {
 
 int main() {
 
-    char *ip = "192.168.0.87";
-    int port = 8080;
+    char *ip = "134.226.44.171";
+    int port = 33338;
     int e;
 
     int sockfd, new_sock;
@@ -161,7 +247,7 @@ int main() {
 
     //Set up the port
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = port;
+    server_addr.sin_port = htons(port);
     server_addr.sin_addr.s_addr = inet_addr(ip);
 
     //Bind the socket to the port and check for errors
@@ -229,22 +315,22 @@ int main() {
                     new_sock = accept(sockfd, (struct sockaddr*)&new_addr, &addr_size);
 
                     printf("Socket %i connected.\n", new_sock);
-                    // int m;
+                    int m;
 
-                    // //Receive the client key
-                    //  if (new_sock == 4) {
-                    //     m = recv(new_sock, &clientAKey, sizeof(clientAKey), 0);
-                    //     printf("Received security key %i.\n", clientAKey);
-                    // }
-                    // else if (new_sock == 5) {
-                    //     m = recv(new_sock, &clientBKey, sizeof(clientBKey), 0);
-                    //     printf("Received security key %i.\n", clientBKey);
-                    // }
+                    //Receive the client key
+                     if (new_sock == 4) {
+                        m = recv(new_sock, &clientAKey, sizeof(clientAKey), 0);
+                        printf("Received security key %i.\n", clientAKey);
+                    }
+                    else if (new_sock == 5) {
+                        m = recv(new_sock, &clientBKey, sizeof(clientBKey), 0);
+                        printf("Received security key %i.\n", clientBKey);
+                    }
 
-                    // //Send the server key
-                    // send(new_sock, &serverKey, sizeof(serverKey), 0);
-                    // printf("Sent security key %i.\n", serverKey);
-                    // //sleep(0.5);
+                    //Send the server key
+                    send(new_sock, &serverKey, sizeof(serverKey), 0);
+                    printf("Sent security key %i.\n", serverKey);
+                    //sleep(0.5);
 
                     //Check for errors, if no errors then add the socket to the socket set and edit the max socket if necessary
                     if (new_sock == -1) {
@@ -318,47 +404,16 @@ int main() {
 
                                 break;
 
-                            //Client wants to disconnect - close their socket and print appropriate message
+                            //Client wants to disconnect - kill the server
+                            //NOTE: RIGHT NOW THIS ONLY KILLS THE CLIENT COMMANDING THIS AND THE SERVER, SECOND CLIENT IS LEFT RUNNING
                             case 3:
-                                printf("Client disconnect requested.\n");
-                                FD_CLR(i, &master);
-                                fd_maxi--;
-                                //flag = 0;
-                                printf("Client connection on socket %i terminated.\n", i);
-                                close(i);
-                                break;
+                            printf("Client disconnect requested.\n");
+                            FD_CLR(i, &master);
+                            close(i);
+                            //flag = 0;
+                            printf("Client connection on socket %i terminated.\n", i);
+                            break;
 
-                            //A probing connection is requesting disconnect - close socket
-                            case 4:
-                                printf("Probing socket disconnect requested\n");
-                                FD_CLR(i, &master);
-                                fd_maxi--;
-                                //flag = 0;
-                                printf("Socket connection terminated, socket %i free again\n", i);
-                                close(i);
-                                break;
-
-                            //Security key request - send/received security keys
-                            case 5:
-                                printf("Security key distribution starting...\n");
-                                int m;
-
-                                //Receive the client key
-                                if (new_sock == 4) {
-                                    m = recv(i, &clientAKey, sizeof(clientAKey), 0);
-                                    printf("Received security key %i.\n", clientAKey);
-                                }
-                                else if (new_sock == 5) {
-                                    m = recv(i, &clientBKey, sizeof(clientBKey), 0);
-                                    printf("Received security key %i.\n", clientBKey);
-                                }
-
-                                //Send the server key
-                                send(i, &serverKey, sizeof(serverKey), 0);
-                                printf("Sent security key %i.\n", serverKey);
-                                sleep(0.5);
-                                break;
-                            
                         }
                     }
                 }
